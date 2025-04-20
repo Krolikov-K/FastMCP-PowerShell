@@ -10,7 +10,9 @@
         'New-Tool',
         'New-Resource',
         'New-Prompt',
-        'Get-FastMCPContext'
+        'Get-FastMCPContext',
+        'Set-Logging',
+        'Get-Logger'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

@@ -4,93 +4,68 @@ Tool manager functionality
 #>
 
 # ToolManager class
-class ToolManager
-{
-    [hashtable]$Tools
-    [string]$DuplicateBehavior
+class ToolManager {
+    [hashtable]$Tools = @{}
+    [string]$DuplicateBehavior = 'warn'
     hidden [object]$Logger
 
-    # Constructor
-    ToolManager()
-    {
-        $this.Tools = @{}
-        $this.DuplicateBehavior = 'warn'  # Options: warn, error, replace, ignore
-        $this.Logger = Get-Logger 'ToolManager'
+    ToolManager() {
+        $this.Logger = Get-Logger -Name 'ToolManager'
+        $this.Logger.Debug("Initializing ToolManager")
     }
 
-    # Add a tool to the manager
-    [Tool] AddTool([Tool]$tool, [string]$key)
-    {
-        $toolKey = $key -or $tool.Name
+    [bool] HasTool([string]$name) {
+        return $this.Tools.ContainsKey($name)
+    }
+
+    [object] AddTool([object]$tool, [string]$name) {
+        $toolName = $name -or $tool.Name
         
-        if ($this.Tools.ContainsKey($toolKey))
-        {
-            switch ($this.DuplicateBehavior)
-            {
-                'warn'
-                {
-                    $this.Logger.Warning.Invoke("Tool already exists: $toolKey")
-                    $this.Tools[$toolKey] = $tool
+        if (-not $toolName) {
+            $this.Logger.Error("Tool name is required")
+            throw [FastMCPException]::new("Tool name is required")
+        }
+        
+        if ($this.HasTool($toolName)) {
+            switch ($this.DuplicateBehavior) {
+                'warn' {
+                    $this.Logger.Warning("Tool already exists: $toolName - replacing")
+                    $this.Tools[$toolName] = $tool
                 }
-                'replace'
-                {
-                    $this.Tools[$toolKey] = $tool
+                'replace' {
+                    $this.Logger.Info("Replacing existing tool: $toolName")
+                    $this.Tools[$toolName] = $tool
                 }
-                'error'
-                {
-                    throw [System.InvalidOperationException]::new("Tool already exists: $toolKey")
+                'error' {
+                    $this.Logger.Error("Tool already exists: $toolName")
+                    throw [FastMCPException]::new("Tool already exists: $toolName")
                 }
-                'ignore'
-                {
-                    return $this.Tools[$toolKey]
+                'ignore' {
+                    $this.Logger.Debug("Ignoring duplicate tool: $toolName")
+                    return $this.Tools[$toolName]
                 }
             }
         }
-        else
-        {
-            $this.Tools[$toolKey] = $tool
+        else {
+            $this.Logger.Debug("Adding new tool: $toolName")
+            $this.Tools[$toolName] = $tool
         }
         
         return $tool
     }
 
-    # Check if a tool exists
-    [bool] HasTool([string]$key)
-    {
-        return $this.Tools.ContainsKey($key)
-    }
-
-    # Get a tool by key
-    [Tool] GetTool([string]$key)
-    {
-        if (-not $this.HasTool($key))
-        {
-            throw [NotFoundError]::new("Unknown tool: $key")
+    [object] GetTool([string]$name) {
+        if ($this.HasTool($name)) {
+            return $this.Tools[$name]
         }
-        return $this.Tools[$key]
+        
+        $this.Logger.Error("Tool not found: $name")
+        throw [FastMCPException]::new("Tool not found: $name")
     }
+}
 
-    # Get all tools
-    [hashtable] GetTools()
-    {
-        return $this.Tools
-    }
-
-    # List all tools in MCP format
-    [array] ListTools()
-    {
-        $result = @()
-        foreach ($tool in $this.Tools.Values)
-        {
-            $result += $tool.ToMCPTool()
-        }
-        return $result
-    }
-
-    # Call a tool by key
-    [array] CallTool([string]$key, [hashtable]$arguments, [Context]$context)
-    {
-        $tool = $this.GetTool($key)
-        return $tool.Run($arguments, $context)
-    }
+# Export functions only if running inside a module
+if ($MyInvocation.MyCommand.ModuleName)
+{
+    Export-ModuleMember -Function 'Register-Tool', 'Get-Tools', 'Invoke-Tool' # Adjust function names if needed
 }

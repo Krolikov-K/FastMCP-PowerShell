@@ -3,43 +3,20 @@
 Common types and utilities used across FastMCP
 #>
 
-# Convert a set or list to a set, defaulting to an empty set if null
+# Convert an array to a HashSet for faster lookups
 function ConvertTo-Set {
-    param(
-        [Parameter(ValueFromPipeline=$true)]
-        [object[]]$InputObject
-    )
+    param([string[]]$InputArray)
     
-    begin {
-        $set = [System.Collections.Generic.HashSet[object]]::new()
+    $set = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($item in $InputArray) {
+        $set.Add($item) | Out-Null
     }
     
-    process {
-        if ($InputObject) {
-            foreach ($item in $InputObject) {
-                [void]$set.Add($item)
-            }
-        }
-    }
-    
-    end {
-        return $set
-    }
+    return $set
 }
 
-# Custom exception types
+# Custom exception type for FastMCP
 class FastMCPException : System.Exception {
     FastMCPException([string]$message) : base($message) {}
-}
-
-class NotFoundError : FastMCPException {
-    NotFoundError([string]$message) : base($message) {}
-}
-
-class ResourceError : FastMCPException {
-    ResourceError([string]$message) : base($message) {}
-}
-
-class ToolError : FastMCPException {
-    ToolError([string]$message) : base($message) {}
+    FastMCPException([string]$message, [System.Exception]$innerException) : base($message, $innerException) {}
 }

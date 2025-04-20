@@ -29,7 +29,7 @@ class ResourceManager
             {
                 'warn'
                 {
-                    $this.Logger.Warning.Invoke("Resource already exists: $resourceKey")
+                    $this.Logger.Warning("Resource already exists: $resourceKey")
                     $this.Resources[$resourceKey] = $resource
                 }
                 'replace'
@@ -38,7 +38,7 @@ class ResourceManager
                 }
                 'error'
                 {
-                    throw [System.InvalidOperationException]::new("Resource already exists: $resourceKey")
+                    throw [FastMCPException]::new("Resource already exists: $resourceKey")
                 }
                 'ignore'
                 {
@@ -65,7 +65,7 @@ class ResourceManager
     {
         if (-not $this.HasResource($uri))
         {
-            throw [NotFoundError]::new("Unknown resource: $uri")
+            throw [FastMCPException]::new("Unknown resource: $uri")
         }
         return $this.Resources[$uri]
     }
@@ -100,4 +100,61 @@ class ResourceManager
             }
         )
     }
+}
+
+# Update the AddResource method to accept PSCustomObject with PSTypeName 'FastMCPResource'
+function New-ResourceManager {
+    $manager = [PSCustomObject]@{
+        Resources = @{}
+        DuplicateBehavior = 'warn'
+        Logger = Get-Logger 'ResourceManager'
+    }
+    
+    # Add methods
+    $manager | Add-Member -MemberType ScriptMethod -Name 'AddResource' -Value {
+        param(
+            [Parameter(Mandatory = $true)]
+            [PSCustomObject]$resource,
+            
+            [Parameter()]
+            [string]$name = $null
+        )
+        
+        # Use the resource name if no name is provided
+        if (-not $name) {
+            $name = $resource.Name
+        }
+        
+        if ($this.Resources.ContainsKey($name)) {
+            switch ($this.DuplicateBehavior) {
+                'warn' {
+                    $this.Logger.Warning("Resource already exists: $name")
+                    $this.Resources[$name] = $resource
+                }
+                'replace' {
+                    $this.Resources[$name] = $resource
+                }
+                'error' {
+                    throw [FastMCPException]::new("Resource already exists: $name")
+                }
+                'ignore' {
+                    return $this.Resources[$name]
+                }
+            }
+        } else {
+            $this.Resources[$name] = $resource
+        }
+        
+        return $resource
+    }
+    
+    # Add other methods as needed
+    
+    return $manager
+}
+
+# Export functions only if running inside a module
+if ($MyInvocation.MyCommand.ModuleName)
+{
+    Export-ModuleMember -Function 'New-ResourceManager'
 }

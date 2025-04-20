@@ -51,12 +51,12 @@ class Resource
             }
             else
             {
-                throw [ResourceError]::new('No content provider available')
+                throw [FastMCPException]::new('No content provider available')
             }
         }
         catch
         {
-            throw [ResourceError]::new("Error reading resource $($this.URI): $_")
+            throw [FastMCPException]::new("Error reading resource $($this.URI): $_")
         }
     }
 
@@ -73,37 +73,39 @@ class Resource
 }
 
 # Function to create a new resource
-function New-Resource
-{
+function New-Resource {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$URI,
-        
-        [Parameter()]
         [string]$Name,
         
         [Parameter()]
-        [string]$Description,
+        [string]$Description = "",
         
         [Parameter()]
-        [string]$MimeType = 'text/plain',
+        [string]$Type = "Generic",
         
         [Parameter()]
-        [string[]]$Tags,
+        [object]$Content = $null,
         
         [Parameter()]
-        [scriptblock]$ContentProvider
+        [string[]]$Tags = @()
     )
     
-    $params = @{
-        URI             = $URI
-        Name            = $Name
-        Description     = $Description
-        MimeType        = $MimeType
-        Tags            = $Tags
-        ContentProvider = $ContentProvider
+    $resource = [PSCustomObject]@{
+        Name = $Name
+        Description = $Description
+        Type = $Type
+        Content = $Content
+        Tags = $Tags
+        PSTypeName = 'FastMCPResource'
     }
     
-    return [Resource]::new($params)
+    return $resource
+}
+
+# Ensure Export-ModuleMember is only called when in a module
+if ($MyInvocation.ScriptName -ne '')
+{
+    Export-ModuleMember -Function 'New-Resource'
 }

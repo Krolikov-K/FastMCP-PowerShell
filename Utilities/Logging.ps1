@@ -3,70 +3,87 @@
 Logging utilities for FastMCP
 #>
 
-enum LogLevel {
-    DEBUG
-    INFO
-    WARNING
-    ERROR
+# Enum for log levels
+if (-not ("LogLevel" -as [Type])) {
+    Add-Type -TypeDefinition @"
+public enum LogLevel {
+    DEBUG,
+    INFO,
+    WARNING,
+    ERROR,
     CRITICAL
 }
-
-# Configuration for logging
-$script:LogLevel = [LogLevel]::INFO
-$script:LogPrefix = "FastMCP"
-
-# Get a logger for a specific component
-function Get-Logger {
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$Name
-    )
-    
-    $loggerName = "$script:LogPrefix.$Name"
-    
-    return @{
-        Debug = {
-            param([string]$Message)
-            if ($script:LogLevel -le [LogLevel]::DEBUG) {
-                Write-Debug "[$loggerName] $Message"
-            }
-        }
-        Info = {
-            param([string]$Message)
-            if ($script:LogLevel -le [LogLevel]::INFO) {
-                Write-Information "[$loggerName] $Message"
-            }
-        }
-        Warning = {
-            param([string]$Message)
-            if ($script:LogLevel -le [LogLevel]::WARNING) {
-                Write-Warning "[$loggerName] $Message"
-            }
-        }
-        Error = {
-            param([string]$Message)
-            if ($script:LogLevel -le [LogLevel]::ERROR) {
-                Write-Error "[$loggerName] $Message"
-            }
-        }
-        Critical = {
-            param([string]$Message)
-            if ($script:LogLevel -le [LogLevel]::CRITICAL) {
-                Write-Error "[$loggerName] CRITICAL: $Message"
-            }
-        }
-    }
+"@
 }
 
-# Configure logging
+# Global log level setting
+$script:LogLevel = [LogLevel]::INFO
+
+# Function to set log level
 function Set-Logging {
+    [CmdletBinding()]
     param(
-        [Parameter()]
-        [LogLevel]$Level = [LogLevel]::INFO
+        [Parameter(Mandatory = $true)]
+        [LogLevel]$Level
     )
     
     $script:LogLevel = $Level
+}
+
+# Function to get a logger
+function Get-Logger {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
     
-    # Configure PowerShell's information stream for our logging
-    $InformationPreference = "Continue"
+    $logger = [PSCustomObject]@{
+        Name = $Name
+        PSTypeName = 'FastMCPLogger'
+    }
+    
+    # Add methods to the logger object
+    $logger | Add-Member -MemberType ScriptMethod -Name 'Debug' -Value {
+        param([string]$Message)
+        if ($script:LogLevel -le [LogLevel]::DEBUG) {
+            Write-Host "[DEBUG] [$($this.Name)] $Message" -ForegroundColor Gray
+        }
+    }
+    
+    $logger | Add-Member -MemberType ScriptMethod -Name 'Info' -Value {
+        param([string]$Message)
+        if ($script:LogLevel -le [LogLevel]::INFO) {
+            Write-Host "[INFO] [$($this.Name)] $Message" -ForegroundColor White
+        }
+    }
+    
+    $logger | Add-Member -MemberType ScriptMethod -Name 'Warning' -Value {
+        param([string]$Message)
+        if ($script:LogLevel -le [LogLevel]::WARNING) {
+            Write-Host "[WARNING] [$($this.Name)] $Message" -ForegroundColor Yellow
+        }
+    }
+    
+    $logger | Add-Member -MemberType ScriptMethod -Name 'Error' -Value {
+        param([string]$Message)
+        if ($script:LogLevel -le [LogLevel]::ERROR) {
+            Write-Host "[ERROR] [$($this.Name)] $Message" -ForegroundColor Red
+        }
+    }
+    
+    $logger | Add-Member -MemberType ScriptMethod -Name 'Critical' -Value {
+        param([string]$Message)
+        if ($script:LogLevel -le [LogLevel]::CRITICAL) {
+            Write-Host "[CRITICAL] [$($this.Name)] $Message" -ForegroundColor Red -BackgroundColor Black
+        }
+    }
+    
+    return $logger
+}
+
+# Export functions only if running inside a module
+if ($MyInvocation.MyCommand.ModuleName)
+{
+    Export-ModuleMember -Function 'Set-Logging', 'Get-Logger'
 }

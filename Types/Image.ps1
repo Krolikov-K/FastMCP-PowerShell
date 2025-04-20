@@ -3,6 +3,26 @@
 Helper class for returning images from tools
 #>
 
+# Try to load System.Drawing assembly at the beginning
+try {
+    Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+    $script:SystemDrawingLoaded = $true
+}
+catch {
+    $script:SystemDrawingLoaded = $false
+    Write-Warning "System.Drawing assembly could not be loaded. Some image functionality will be limited."
+}
+
+# Define known image format GUIDs to avoid direct type references
+$script:ImageFormatGuids = @{
+    'BMP'  = [guid]'b96b3cab-0728-11d3-9d7b-0000f81ef32e'
+    'JPEG' = [guid]'b96b3cae-0728-11d3-9d7b-0000f81ef32e'
+    'PNG'  = [guid]'b96b3caf-0728-11d3-9d7b-0000f81ef32e'
+    'GIF'  = [guid]'b96b3cb0-0728-11d3-9d7b-0000f81ef32e'
+    'TIFF' = [guid]'b96b3cb1-0728-11d3-9d7b-0000f81ef32e'
+    'ICON' = [guid]'b96b3cb5-0728-11d3-9d7b-0000f81ef32e'
+}
+
 # Define Image class
 class Image
 {
@@ -50,30 +70,12 @@ class Image
             
             switch ($extension)
             {
-                '.png'
-                {
-                    return 'image/png' 
-                }
-                '.jpg'
-                {
-                    return 'image/jpeg' 
-                }
-                '.jpeg'
-                {
-                    return 'image/jpeg' 
-                }
-                '.gif'
-                {
-                    return 'image/gif' 
-                }
-                '.webp'
-                {
-                    return 'image/webp' 
-                }
-                default
-                {
-                    return 'application/octet-stream' 
-                }
+                '.png'  { return 'image/png' }
+                '.jpg'  { return 'image/jpeg' }
+                '.jpeg' { return 'image/jpeg' }
+                '.gif'  { return 'image/gif' }
+                '.webp' { return 'image/webp' }
+                default { return 'application/octet-stream' }
             }
         }
         
@@ -87,51 +89,88 @@ class Image
         {
             try
             {
-                # Add System.Drawing assembly if needed
-                if (-not ([System.Management.Automation.PSTypeName]'System.Drawing.Bitmap').Type)
+                # Check if System.Drawing was successfully loaded
+                if ($script:SystemDrawingLoaded)
                 {
-                    Add-Type -AssemblyName System.Drawing
-                }
-                
-                $imageFile = [System.IO.Path]::GetFullPath($this.Path)
-                $image = [System.Drawing.Image]::FromFile($imageFile)
-                
-                # Get image format information
-                $formatNames = @{
-                    [System.Drawing.Imaging.ImageFormat]::Bmp.Guid  = 'BMP'
-                    [System.Drawing.Imaging.ImageFormat]::Jpeg.Guid = 'JPEG'
-                    [System.Drawing.Imaging.ImageFormat]::Png.Guid  = 'PNG'
-                    [System.Drawing.Imaging.ImageFormat]::Gif.Guid  = 'GIF'
-                    [System.Drawing.Imaging.ImageFormat]::Tiff.Guid = 'TIFF'
-                    [System.Drawing.Imaging.ImageFormat]::Icon.Guid = 'ICON'
-                }
-                
-                $formatGuid = $image.RawFormat.Guid
-                $this.Format = $formatNames[$formatGuid]
-                if (-not $this.Format)
-                {
+                    # Use reflection to work with System.Drawing types
+                    $imageFile = [System.IO.Path]::GetFullPath($this.Path)
+                    
+                    # Get the System.Drawing.Image type and call FromFile method
+                    $imageType = [System.Reflection.Assembly]::LoadWithPartialName("System.Drawing").GetType("System.Drawing.Image")
+                    $fromFileMethod = $imageType.GetMethod("FromFile", [System.Type[]]@([string]))
+                    $image = $fromFileMethod.Invoke($null, @($imageFile))
+                    
+                    # Get the RawFormat property and its Guid property
+                    $rawFormatProperty = $imageType.GetProperty("RawFormat")
+                    $rawFormat = $rawFormatProperty.GetValue($image)
+                    $guidProperty = $rawFormat.GetType().GetProperty("Guid")
+                    $formatGuid = $guidProperty.GetValue($rawFormat)
+                    
+                    # Find the format name by comparing GUIDs
                     $this.Format = 'Unknown'
+                    foreach ($key in $script:ImageFormatGuids.Keys)
+                    {
+                        if ($script:ImageFormatGuids[$key] -eq $formatGuid)
+                        {
+                            $this.Format = $key
+                            break
+                        }
+                    }
+                    
+                    # Get dimensions
+                    $this.Width = $imageType.GetProperty("Width").GetValue($image)
+                    $this.Height = $imageType.GetProperty("Height").GetValue($image)
+                    
+                    # Read image data as byte array if needed
+                    if (-not $this.Data)
+                    {
+                        $memoryStreamType = [System.IO.MemoryStream]
+                        $memoryStream = New-Object $memoryStreamType
+                        
+                        # Call the Save method
+                        $saveMethod = $imageType.GetMethod("Save", [System.Type[]]@([System.IO.Stream], [System.Type]))
+                        $saveMethod.Invoke($image, @($memoryStream, $rawFormat))
+                        
+                        $this.Data = $memoryStream.ToArray()
+                        $memoryStream.Dispose()
+                    }
+                    
+                    # Clean up
+                    $disposeMethod = $imageType.GetMethod("Dispose")
+                    $disposeMethod.Invoke($image, @())
                 }
-                
-                $this.Width = $image.Width
-                $this.Height = $image.Height
-                
-                # Read image data as byte array if needed
-                if (-not $this.Data)
+                else
                 {
-                    $memoryStream = New-Object System.IO.MemoryStream
-                    $image.Save($memoryStream, $image.RawFormat)
-                    $this.Data = $memoryStream.ToArray()
-                    $memoryStream.Dispose()
+                    # Fallback when System.Drawing is not available
+                    # Just load the raw binary data
+                    $this.Data = [System.IO.File]::ReadAllBytes($this.Path)
+                    
+                    # Try to determine format from file extension
+                    $extension = [System.IO.Path]::GetExtension($this.Path).ToLower()
+                    switch ($extension)
+                    {
+                        '.png'  { $this.Format = 'PNG' }
+                        '.jpg'  { $this.Format = 'JPEG' }
+                        '.jpeg' { $this.Format = 'JPEG' }
+                        '.gif'  { $this.Format = 'GIF' }
+                        '.bmp'  { $this.Format = 'BMP' }
+                        default { $this.Format = 'Unknown' }
+                    }
+                    
+                    # Unable to determine dimensions without System.Drawing
+                    $this.Width = 0
+                    $this.Height = 0
                 }
-                
-                # Clean up
-                $image.Dispose()
             }
             catch
             {
-                $logger = Get-Logger -Name 'Image'
-                $logger.Error("Failed to load image metadata: $_")
+                try {
+                    $logger = Get-Logger -Name 'Image' 
+                    $logger.Error("Failed to load image metadata: $_")
+                }
+                catch {
+                    Write-Warning "Failed to load image metadata: $_"
+                }
             }
         }
     }
@@ -189,15 +228,23 @@ function New-Image
             throw "Image file not found: $Path"
         }
         
-        $logger = Get-Logger -Name 'Image'
+        try {
+            $logger = Get-Logger -Name 'Image'
+            $logger.Debug("Creating image from path: $Path")
+        }
+        catch {
+            Write-Verbose "Creating image from path: $Path"
+        }
         
-        $logger.Debug("Creating image from path: $Path")
         $image = [Image]::new($Path)
         
         # Set additional properties
         $image.Tags = $Tags
         $image.Name = [System.IO.Path]::GetFileNameWithoutExtension($Path)
         $image.Description = $Description
+        
+        # Add Type property for tests
+        Add-Member -InputObject $image -MemberType NoteProperty -Name 'Type' -Value 'Image'
     }
     else
     {
@@ -212,6 +259,7 @@ function New-Image
             Name           = $Name
             Description    = $Description
             MimeType       = 'image/png'
+            Type           = 'Image'
             PSTypeName     = 'FastMCPImage'
             
             # Add ToImageContent method for test compatibility

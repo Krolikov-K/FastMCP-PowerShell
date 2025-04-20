@@ -10,8 +10,8 @@ function New-FastMCPServer
         [Parameter(Mandatory = $true)]
         [string]$Endpoint,
         
-        [Parameter(Mandatory = $true)]
-        [string]$ApiKey,
+        [Parameter()]
+        [string]$ApiKey = (New-Guid).Guid,
         
         [Parameter()]
         [string]$Provider = 'OpenAI',

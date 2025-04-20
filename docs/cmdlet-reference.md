@@ -10,7 +10,7 @@ Creates a new FastMCP server instance for interacting with AI models.
 ### SYNTAX
 
 ```
-New-FastMCPServer [-Endpoint] <string> [-ApiKey] <string> [[-Provider] <string>] [[-Model] <string>] [[-Options] <hashtable>]
+New-FastMCPServer [-Endpoint] <string> [[-ApiKey] <string>] [[-Provider] <string>] [[-Model] <string>] [[-Options] <hashtable>]
 ```
 
 ### DESCRIPTION
@@ -33,9 +33,9 @@ The API key used for authentication.
 
 ```yaml
 Type: String
-Required: True
+Required: False
 Position: 1
-Default value: None
+Default value: New GUID
 ```
 
 #### -Provider
@@ -55,7 +55,7 @@ The specific model to use from the provider.
 Type: String
 Required: False
 Position: 3
-Default value: Depends on provider
+Default value: None
 ```
 
 #### -Options
@@ -80,7 +80,7 @@ $server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-
 $options = @{
     MaxTokens = 4096
     Temperature = 0.7
-    StreamingEnabled = $true
+    Name = "MyCustomServer"
 }
 $server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-api-key" -Model "gpt-4" -Options $options
 ```
@@ -93,20 +93,36 @@ Creates an image resource for use with AI models.
 ### SYNTAX
 
 ```
-New-Image [-Name] <string> [-Description] <string> [-Path] <string> [[-Tags] <string[]>]
+New-Image [-Path] <string> [[-Description] <string>] [[-Tags] <string[]>]
+```
+
+or
+
+```
+New-Image [-Name] <string> [[-Description] <string>] [[-Tags] <string[]>]
 ```
 
 ### DESCRIPTION
-The `New-Image` cmdlet creates an image resource that can be shared with AI models that support image inputs. The image is loaded from the specified path and made available for use in the context.
+The `New-Image` cmdlet creates an image resource that can be shared with AI models that support image inputs. The image can be loaded from a specified path or created with just a name (for testing purposes).
 
 ### PARAMETERS
 
-#### -Name
-A unique name for the image resource.
+#### -Path
+The file path to the image.
 
 ```yaml
 Type: String
-Required: True
+Required: True (in Path parameter set)
+Position: 0
+Default value: None
+```
+
+#### -Name
+A unique name for the image resource (used in the NamedImage parameter set).
+
+```yaml
+Type: String
+Required: True (in NamedImage parameter set)
 Position: 0
 Default value: None
 ```
@@ -116,19 +132,9 @@ A description of the image content.
 
 ```yaml
 Type: String
-Required: True
+Required: False
 Position: 1
-Default value: None
-```
-
-#### -Path
-The file path to the image.
-
-```yaml
-Type: String
-Required: True
-Position: 2
-Default value: None
+Default value: ""
 ```
 
 #### -Tags
@@ -137,20 +143,25 @@ Optional array of tags for categorization.
 ```yaml
 Type: String[]
 Required: False
-Position: 3
+Position: 2
 Default value: @()
 ```
 
 ### EXAMPLES
 
-#### Example 1: Create a basic image resource
+#### Example 1: Create an image resource from a file
 ```powershell
-$image = New-Image -Name "ProductDiagram" -Description "Technical diagram of the product" -Path "./images/diagram.png"
+$image = New-Image -Path "./images/diagram.png" -Description "Technical diagram of the product"
 ```
 
 #### Example 2: Create an image with tags
 ```powershell
-$image = New-Image -Name "TeamPhoto" -Description "Company team photo from annual retreat" -Path "./images/team.jpg" -Tags "company", "team", "2023"
+$image = New-Image -Path "./images/team.jpg" -Description "Company team photo from annual retreat" -Tags "company", "team", "2023"
+```
+
+#### Example 3: Create a named image (for testing)
+```powershell
+$image = New-Image -Name "TestImage" -Description "A test image resource"
 ```
 
 ## New-Tool
@@ -269,7 +280,7 @@ Creates a resource that can be referenced by AI models.
 ### SYNTAX
 
 ```
-New-Resource [-Name] <string> [-Description] <string> [-Content] <object> [[-Type] <string>] [[-Tags] <string[]>]
+New-Resource [-Name] <string> [[-Description] <string>] [-Content] <object> [[-Type] <string>] [[-Tags] <string[]>]
 ```
 
 ### DESCRIPTION
@@ -292,13 +303,13 @@ Description of the resource.
 
 ```yaml
 Type: String
-Required: True
+Required: False
 Position: 1
-Default value: None
+Default value: ""
 ```
 
 #### -Content
-The resource content or a path to it.
+The resource content or a script block that returns content.
 
 ```yaml
 Type: Object
@@ -344,6 +355,13 @@ $data = @{
 }
 
 $productsResource = New-Resource -Name "Products" -Description "Product catalog" -Content ($data | ConvertTo-Json) -Type "json" -Tags "catalog", "products"
+```
+
+#### Example 3: Create a resource with a script block
+```powershell
+$dynamicResource = New-Resource -Name "CurrentTime" -Description "Current system time" -Content {
+    Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+}
 ```
 
 ## New-Prompt
@@ -438,7 +456,7 @@ Gets a context object for working with AI models.
 ### SYNTAX
 
 ```
-Get-FastMCPContext [-Server] <FastMCPServer>
+Get-FastMCPContext [-Server] <PSObject> [[-ContextId] <string>]
 ```
 
 ### DESCRIPTION
@@ -450,10 +468,20 @@ The `Get-FastMCPContext` cmdlet retrieves a context object for the specified Fas
 The FastMCP server instance to use.
 
 ```yaml
-Type: FastMCPServer
+Type: PSObject
 Required: True
 Position: 0
 Default value: None
+```
+
+#### -ContextId
+Optional context identifier.
+
+```yaml
+Type: String
+Required: False
+Position: 1
+Default value: New GUID
 ```
 
 ### EXAMPLES
@@ -464,20 +492,108 @@ $server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-
 $context = Get-FastMCPContext -Server $server
 ```
 
-#### Example 2: Get a context and configure it
+#### Example 2: Get a context with a specific ID
 ```powershell
 $server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-api-key"
-$context = Get-FastMCPContext -Server $server
+$context = Get-FastMCPContext -Server $server -ContextId "session-12345"
+```
 
-# Add tools and resources
-$context.AddTool($myTool)
-$context.AddResource($myResource)
-$context.AddPrompt($myPrompt)
+## Set-Logging
 
-# Configure context options
-$context.SetOption("temperature", 0.8)
-$context.SetOption("maxTokens", 2048)
+### SYNOPSIS
+Configures the logging settings for the FastMCP module.
 
-# Send a request
-$response = $context.SendRequest("What can you tell me about the data?")
+### SYNTAX
+
+```
+Set-Logging [-Level] <LogLevel> [[-LogPath] <string>]
+```
+
+### DESCRIPTION
+The `Set-Logging` cmdlet configures the logging level and output location for the FastMCP module. This allows you to control the verbosity of diagnostic information.
+
+### PARAMETERS
+
+#### -Level
+The logging level to set.
+
+```yaml
+Type: LogLevel
+Required: True
+Position: 0
+Default value: INFO
+Accepted values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+```
+
+#### -LogPath
+Optional path to a log file.
+
+```yaml
+Type: String
+Required: False
+Position: 1
+Default value: None
+```
+
+### EXAMPLES
+
+#### Example 1: Set logging level to DEBUG
+```powershell
+Set-Logging -Level DEBUG
+```
+
+#### Example 2: Configure logging to write to a file
+```powershell
+Set-Logging -Level INFO -LogPath "C:\Logs\fastmcp.log"
+```
+
+## Get-Logger
+
+### SYNOPSIS
+Gets a logger instance for the specified component.
+
+### SYNTAX
+
+```
+Get-Logger [-Name] <string>
+```
+
+### DESCRIPTION
+The `Get-Logger` cmdlet retrieves a logger instance that can be used to log messages from a specific component. This is primarily used internally by the module but can also be used by consumers for consistent logging.
+
+### PARAMETERS
+
+#### -Name
+The name of the component requesting the logger.
+
+```yaml
+Type: String
+Required: True
+Position: 0
+Default value: None
+```
+
+### EXAMPLES
+
+#### Example 1: Get a logger for a component
+```powershell
+$logger = Get-Logger -Name "MyComponent"
+$logger.Info("Processing started")
+$logger.Debug("Detailed information")
+```
+
+#### Example 2: Use the logger in a custom tool
+```powershell
+$customTool = New-Tool -Name "CustomProcess" -Description "Processes data with logging" -Function {
+    param($data)
+    
+    $logger = Get-Logger -Name "CustomProcess"
+    $logger.Info("Processing started")
+    
+    # Process data
+    $result = $data | ForEach-Object { $_ * 2 }
+    
+    $logger.Info("Processing completed")
+    return $result
+}
 ```

@@ -54,6 +54,8 @@ Next, get a context object that will manage your interaction with the model:
 
 ```powershell
 # Get a context from the server
+$context = $server.GetContext()
+# Or alternatively:
 $context = Get-FastMCPContext -Server $server
 ```
 
@@ -86,7 +88,9 @@ Unused vacation days can be carried over to the next year up to a maximum of 5 d
 "@
 
 # Add the resource to the context
-$context.AddResource($companyPolicy)
+$context.AddResource($companyPolicy.Name, $companyPolicy.Description, $companyPolicy.Content)
+# Or directly:
+$context.Resources[$companyPolicy.Name] = $companyPolicy
 ```
 
 ### Adding Prompts
@@ -119,7 +123,7 @@ $response = $context.SendRequest("What is the capital of France?")
 Write-Output $response.Content
 
 # Send a request using a specific prompt
-$response = $context.SendRequest("What is the company vacation policy?", @{
+$response = $context.SendRequest("", @{
     promptName = "QAPrompt"
     promptArgs = @{ question = "What is the company vacation policy?" }
 })
@@ -170,7 +174,7 @@ $travelTips = New-Resource -Name "TravelTips" -Description "Travel tips for vari
 - Most restaurants are closed between lunch and dinner
 - Tipping is not customary
 "@
-$context.AddResource($travelTips)
+$context.Resources[$travelTips.Name] = $travelTips
 
 # Create and add a prompt
 $travelPrompt = New-Prompt -Name "TravelPlanner" -Description "Travel planning assistant" -RenderScript {
@@ -210,6 +214,6 @@ Now that you're familiar with the basics of FastMCP, you can:
 
 1. Explore the [Cmdlet Reference](./cmdlet-reference.md) for detailed information about all available cmdlets
 2. Check out the [Advanced Scenarios](./advanced-scenarios.md) guide for more complex use cases
-3. Review the [Best Practices](./best-practices.md) for tips on getting the most out of FastMCP
+3. Learn about logging and debugging with `Set-Logging` and `Get-Logger`
 
-For any issues or questions, please file them on our [GitHub repository](https://github.com/example/FastMCP-PowerShell/issues).
+For any issues or questions, please file them on our GitHub repository.

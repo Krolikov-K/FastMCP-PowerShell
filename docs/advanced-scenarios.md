@@ -326,4 +326,31 @@ Process the dataset at 'large_dataset.csv' with the following operations:
 "@, @{ trackProgress = $true })
 ```
 
+## Advanced Server Usage Examples
+
+### Testing Server Connection
+```powershell
+$server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-api-key"
+if ($server.TestConnection()) {
+    Write-Output "Server connection is successful."
+} else {
+    Write-Output "Failed to connect to the server."
+}
+```
+
+### Reporting Progress in Long-Running Tasks
+```powershell
+$context = Get-FastMCPContext -Server $server
+# Simulate progress updates in a long-running process
+for ($i = 1; $i -le 100; $i += 20) {
+    $progressInfo = @{
+        Operation       = "Data Processing"
+        PercentComplete = $i
+        Timestamp       = (Get-Date)
+    }
+    $context.ReportProgress($progressInfo)
+    Start-Sleep -Seconds 1
+}
+```
+
 These advanced scenarios demonstrate the flexibility and power of FastMCP for building complex AI-powered workflows in PowerShell.

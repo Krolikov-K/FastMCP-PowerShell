@@ -4,13 +4,15 @@ Helper class for returning images from tools
 #>
 
 # Try to load System.Drawing assembly at the beginning
-try {
+try
+{
     Add-Type -AssemblyName System.Drawing -ErrorAction Stop
     $script:SystemDrawingLoaded = $true
 }
-catch {
+catch
+{
     $script:SystemDrawingLoaded = $false
-    Write-Warning "System.Drawing assembly could not be loaded. Some image functionality will be limited."
+    Write-Warning 'System.Drawing assembly could not be loaded. Some image functionality will be limited.'
 }
 
 # Define known image format GUIDs to avoid direct type references
@@ -70,12 +72,30 @@ class Image
             
             switch ($extension)
             {
-                '.png'  { return 'image/png' }
-                '.jpg'  { return 'image/jpeg' }
-                '.jpeg' { return 'image/jpeg' }
-                '.gif'  { return 'image/gif' }
-                '.webp' { return 'image/webp' }
-                default { return 'application/octet-stream' }
+                '.png'
+                {
+                    return 'image/png' 
+                }
+                '.jpg'
+                {
+                    return 'image/jpeg' 
+                }
+                '.jpeg'
+                {
+                    return 'image/jpeg' 
+                }
+                '.gif'
+                {
+                    return 'image/gif' 
+                }
+                '.webp'
+                {
+                    return 'image/webp' 
+                }
+                default
+                {
+                    return 'application/octet-stream' 
+                }
             }
         }
         
@@ -89,87 +109,157 @@ class Image
         {
             try
             {
-                # Check if System.Drawing was successfully loaded
+                # Load the raw binary data first - this ensures we have the data even if metadata extraction fails
+                $this.Data = [System.IO.File]::ReadAllBytes($this.Path)
+                
+                # Try to determine format from file extension as a fallback
+                $extension = [System.IO.Path]::GetExtension($this.Path).ToLower()
+                switch ($extension)
+                {
+                    '.png'
+                    {
+                        $this.Format = 'PNG' 
+                    }
+                    '.jpg'
+                    {
+                        $this.Format = 'JPEG' 
+                    }
+                    '.jpeg'
+                    {
+                        $this.Format = 'JPEG' 
+                    }
+                    '.gif'
+                    {
+                        $this.Format = 'GIF' 
+                    }
+                    '.bmp'
+                    {
+                        $this.Format = 'BMP' 
+                    }
+                    '.tiff'
+                    {
+                        $this.Format = 'TIFF' 
+                    }
+                    '.webp'
+                    {
+                        $this.Format = 'WEBP' 
+                    }
+                    default
+                    {
+                        $this.Format = 'Unknown' 
+                    }
+                }
+                
+                # Set the name if not already done
+                if (-not $this.Name)
+                {
+                    $this.Name = [System.IO.Path]::GetFileNameWithoutExtension($this.Path)
+                }
+                
+                # Only attempt to use System.Drawing if it was successfully loaded
                 if ($script:SystemDrawingLoaded)
                 {
                     # Use reflection to work with System.Drawing types
                     $imageFile = [System.IO.Path]::GetFullPath($this.Path)
                     
-                    # Get the System.Drawing.Image type and call FromFile method
-                    $imageType = [System.Reflection.Assembly]::LoadWithPartialName("System.Drawing").GetType("System.Drawing.Image")
-                    $fromFileMethod = $imageType.GetMethod("FromFile", [System.Type[]]@([string]))
+                    # Get the System.Drawing.Image type
+                    $drawingAssembly = [System.Reflection.Assembly]::LoadWithPartialName('System.Drawing')
+                    if ($null -eq $drawingAssembly)
+                    {
+                        throw 'Could not load System.Drawing assembly'
+                    }
+                    
+                    $imageType = $drawingAssembly.GetType('System.Drawing.Image')
+                    if ($null -eq $imageType)
+                    {
+                        throw 'Could not get System.Drawing.Image type'
+                    }
+                    
+                    # Call FromFile method
+                    $fromFileMethod = $imageType.GetMethod('FromFile', [System.Type[]]@([string]))
+                    if ($null -eq $fromFileMethod)
+                    {
+                        throw 'Could not get FromFile method'
+                    }
+                    
                     $image = $fromFileMethod.Invoke($null, @($imageFile))
+                    if ($null -eq $image)
+                    {
+                        throw 'Failed to load image from file'
+                    }
+                    
+                    # Get Width and Height - these are simple properties
+                    $widthProperty = $imageType.GetProperty('Width')
+                    $heightProperty = $imageType.GetProperty('Height')
+                    
+                    if ($null -ne $widthProperty -and $null -ne $heightProperty)
+                    {
+                        $this.Width = $widthProperty.GetValue($image)
+                        $this.Height = $heightProperty.GetValue($image)
+                    }
                     
                     # Get the RawFormat property and its Guid property
-                    $rawFormatProperty = $imageType.GetProperty("RawFormat")
-                    $rawFormat = $rawFormatProperty.GetValue($image)
-                    $guidProperty = $rawFormat.GetType().GetProperty("Guid")
-                    $formatGuid = $guidProperty.GetValue($rawFormat)
-                    
-                    # Find the format name by comparing GUIDs
-                    $this.Format = 'Unknown'
-                    foreach ($key in $script:ImageFormatGuids.Keys)
+                    $rawFormatProperty = $imageType.GetProperty('RawFormat')
+                    if ($null -ne $rawFormatProperty)
                     {
-                        if ($script:ImageFormatGuids[$key] -eq $formatGuid)
+                        $rawFormat = $rawFormatProperty.GetValue($image)
+                        if ($null -ne $rawFormat)
                         {
-                            $this.Format = $key
-                            break
+                            $guidProperty = $rawFormat.GetType().GetProperty('Guid')
+                            if ($null -ne $guidProperty)
+                            {
+                                $formatGuid = $guidProperty.GetValue($rawFormat)
+                                
+                                # Find the format name by comparing GUIDs
+                                foreach ($key in $script:ImageFormatGuids.Keys)
+                                {
+                                    if ($script:ImageFormatGuids[$key] -eq $formatGuid)
+                                    {
+                                        $this.Format = $key
+                                        break
+                                    }
+                                }
+                            }
                         }
                     }
                     
-                    # Get dimensions
-                    $this.Width = $imageType.GetProperty("Width").GetValue($image)
-                    $this.Height = $imageType.GetProperty("Height").GetValue($image)
-                    
-                    # Read image data as byte array if needed
-                    if (-not $this.Data)
-                    {
-                        $memoryStreamType = [System.IO.MemoryStream]
-                        $memoryStream = New-Object $memoryStreamType
-                        
-                        # Call the Save method
-                        $saveMethod = $imageType.GetMethod("Save", [System.Type[]]@([System.IO.Stream], [System.Type]))
-                        $saveMethod.Invoke($image, @($memoryStream, $rawFormat))
-                        
-                        $this.Data = $memoryStream.ToArray()
-                        $memoryStream.Dispose()
-                    }
-                    
                     # Clean up
-                    $disposeMethod = $imageType.GetMethod("Dispose")
-                    $disposeMethod.Invoke($image, @())
-                }
-                else
-                {
-                    # Fallback when System.Drawing is not available
-                    # Just load the raw binary data
-                    $this.Data = [System.IO.File]::ReadAllBytes($this.Path)
-                    
-                    # Try to determine format from file extension
-                    $extension = [System.IO.Path]::GetExtension($this.Path).ToLower()
-                    switch ($extension)
+                    $disposeMethod = $imageType.GetMethod('Dispose')
+                    if ($null -ne $disposeMethod)
                     {
-                        '.png'  { $this.Format = 'PNG' }
-                        '.jpg'  { $this.Format = 'JPEG' }
-                        '.jpeg' { $this.Format = 'JPEG' }
-                        '.gif'  { $this.Format = 'GIF' }
-                        '.bmp'  { $this.Format = 'BMP' }
-                        default { $this.Format = 'Unknown' }
+                        $disposeMethod.Invoke($image, @())
                     }
-                    
-                    # Unable to determine dimensions without System.Drawing
-                    $this.Width = 0
-                    $this.Height = 0
                 }
             }
             catch
             {
-                try {
-                    $logger = Get-Logger -Name 'Image' 
-                    $logger.Error("Failed to load image metadata: $_")
+                # Log the error but continue - we've already loaded the raw data
+                try
+                {
+                    # Get the logger but don't fail if that also fails
+                    $logger = $null
+                    try
+                    {
+                        $logger = Get-Logger -Name 'Image'
+                    }
+                    catch
+                    {
+                        # Silently continue if logger can't be created
+                    }
+                    
+                    if ($null -ne $logger)
+                    {
+                        $logger.Error("Failed to load image metadata: $_")
+                    }
+                    else
+                    {
+                        Write-Warning "Failed to load image metadata: $_"
+                    }
                 }
-                catch {
-                    Write-Warning "Failed to load image metadata: $_"
+                catch
+                {
+                    # Last resort if even the error handling fails
+                    Write-Warning "Error handling failed: $_"
                 }
             }
         }
@@ -180,12 +270,29 @@ class Image
     {
         $base64Data = ''
         
+        # Try to load data if not already loaded
         if ($this.Path -and (-not $this.Data))
         {
-            $bytes = [System.IO.File]::ReadAllBytes($this.Path)
-            $base64Data = [Convert]::ToBase64String($bytes)
+            try
+            {
+                $this.Data = [System.IO.File]::ReadAllBytes($this.Path)
+            }
+            catch
+            {
+                try
+                {
+                    $logger = Get-Logger -Name 'Image'
+                    $logger.Error("Failed to load image data: $_")
+                }
+                catch
+                {
+                    Write-Warning "Failed to load image data: $_"
+                }
+                throw [System.Exception]::new('Failed to load image data')
+            }
         }
-        elseif ($this.Data)
+        
+        if ($this.Data)
         {
             $base64Data = [Convert]::ToBase64String($this.Data)
         }
@@ -211,40 +318,188 @@ function New-Image
         [string]$Path,
         
         [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'NamedImage')]
+        [Parameter(Mandatory = $false, ParameterSetName = 'Path')]
         [string]$Name,
         
-        [Parameter(Position = 1, ParameterSetName = 'NamedImage')]
-        [Parameter(Position = 1, ParameterSetName = 'Path')]
+        [Parameter(Position = 1)]
         [string]$Description = '',
         
         [Parameter()]
-        [string[]]$Tags = @()
+        [string[]]$Tags = @(),
+        
+        [Parameter()]
+        [switch]$CreateIfNotExists
     )
+    
+    # Output parameter details to aid in debugging
+    Write-Verbose 'New-Image Parameters:'
+    Write-Verbose "  Path: $Path"
+    Write-Verbose "  Name: $Name"
+    Write-Verbose "  Description: $Description"
+    Write-Verbose "  CreateIfNotExists: $CreateIfNotExists"
     
     if ($PSCmdlet.ParameterSetName -eq 'Path')
     {
-        if (-not (Test-Path -Path $Path))
+        # First check if the path exists and is accessible
+        if (-not (Test-Path -Path $Path -IsValid))
         {
-            throw "Image file not found: $Path"
+            throw "Invalid path format: $Path"
         }
         
-        try {
-            $logger = Get-Logger -Name 'Image'
-            $logger.Debug("Creating image from path: $Path")
-        }
-        catch {
-            Write-Verbose "Creating image from path: $Path"
+        # Check if file exists
+        $fileExists = Test-Path -Path $Path -PathType Leaf
+        Write-Verbose "File exists: $fileExists"
+        Write-Verbose "CreateIfNotExists parameter: $($CreateIfNotExists.IsPresent)"
+        
+        # Handle file not existing
+        if (-not $fileExists)
+        {
+            # Important: Check if CreateIfNotExists switch is present
+            if ($CreateIfNotExists.IsPresent)
+            {
+                Write-Verbose "Creating placeholder image for non-existent file: $Path"
+                
+                # Create a placeholder image with just the path set
+                $imageName = if ([string]::IsNullOrEmpty($Name))
+                { 
+                    [System.IO.Path]::GetFileNameWithoutExtension($Path) 
+                }
+                else
+                { 
+                    $Name 
+                }
+                $extension = [System.IO.Path]::GetExtension($Path).ToLower()
+                
+                # Determine MIME type from extension
+                $mimeType = 'image/png'
+                $format = 'PNG'
+                switch ($extension)
+                {
+                    '.png'
+                    {
+                        $mimeType = 'image/png'; $format = 'PNG' 
+                    }
+                    '.jpg'
+                    {
+                        $mimeType = 'image/jpeg'; $format = 'JPEG' 
+                    }
+                    '.jpeg'
+                    {
+                        $mimeType = 'image/jpeg'; $format = 'JPEG' 
+                    }
+                    '.gif'
+                    {
+                        $mimeType = 'image/gif'; $format = 'GIF' 
+                    }
+                    '.bmp'
+                    {
+                        $mimeType = 'image/bmp'; $format = 'BMP' 
+                    }
+                    '.webp'
+                    {
+                        $mimeType = 'image/webp'; $format = 'WEBP' 
+                    }
+                    default
+                    {
+                        $mimeType = 'image/png'; $format = 'PNG' 
+                    }
+                }
+                
+                # Create a placeholder image object
+                $image = [PSCustomObject]@{
+                    Path           = $Path
+                    Data           = $null
+                    Format         = $format
+                    Width          = 0
+                    Height         = 0
+                    Tags           = $Tags
+                    Name           = $imageName
+                    Description    = $Description
+                    MimeType       = $mimeType
+                    Type           = 'Image'
+                    PSTypeName     = 'FastMCPImage'
+                    
+                    # Add ToImageContent method for test compatibility
+                    ToImageContent = {
+                        return @{
+                            type     = 'image'
+                            data     = ''
+                            mimeType = $this.MimeType
+                        }
+                    }
+                }
+                
+                # Add Type property for tests if not already set
+                if (-not $image.Type)
+                {
+                    Add-Member -InputObject $image -MemberType NoteProperty -Name 'Type' -Value 'Image'
+                }
+                
+                Write-Verbose 'Successfully created placeholder image object'
+                return $image
+            }
+            else
+            {
+                # Check if directory exists 
+                $directory = Split-Path -Path $Path -Parent
+                if (-not [string]::IsNullOrEmpty($directory) -and -not (Test-Path -Path $directory))
+                {
+                    throw "Directory does not exist: $directory"
+                }
+                throw "Image file not found: $Path"
+            }
         }
         
+        try
+        {
+            $logger = $null
+            try
+            {
+                $logger = Get-Logger -Name 'Image'
+            }
+            catch
+            {
+                # Continue if logger creation fails
+            }
+            
+            if ($null -ne $logger)
+            {
+                $logger.Debug("Creating image from path: $Path")
+            }
+            else
+            {
+                Write-Verbose "Creating image from path: $Path"
+            }
+        }
+        catch
+        {
+            # Continue if logging fails
+            Write-Verbose "Creating image with path: $Path"
+        }
+        
+        # Create an actual image from the file
         $image = [Image]::new($Path)
         
         # Set additional properties
         $image.Tags = $Tags
-        $image.Name = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+        
+        # Use the provided name or get it from the path
+        if (-not [string]::IsNullOrEmpty($Name))
+        {
+            $image.Name = $Name
+        }
+        elseif (-not $image.Name)
+        {
+            $image.Name = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+        }
+        
         $image.Description = $Description
         
-        # Add Type property for tests
-        Add-Member -InputObject $image -MemberType NoteProperty -Name 'Type' -Value 'Image'
+        # Add Type property for tests if not already set
+        if (-not $image.Type)
+        {
+            Add-Member -InputObject $image -MemberType NoteProperty -Name 'Type' -Value 'Image'
+        }
     }
     else
     {

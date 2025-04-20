@@ -10,11 +10,11 @@ Creates a new FastMCP server instance for interacting with AI models.
 ### SYNTAX
 
 ```
-New-FastMCPServer [-Endpoint] <string> [[-ApiKey] <string>] [[-Provider] <string>] [[-Model] <string>] [[-Options] <hashtable>]
+New-FastMCPServer [-Endpoint] <string> [[-ApiKey] <string>] [[-Provider] <string>] [[-Model] <string>] [[-Options] <hashtable>] [[-Timeout] <int>]
 ```
 
 ### DESCRIPTION
-The `New-FastMCPServer` cmdlet creates a new server instance that connects to an AI model provider's API. This is typically the first step in using FastMCP, as the server manages the connection to the underlying model.
+The `New-FastMCPServer` cmdlet creates a new server instance that connects to an AI model provider's API. This is typically the first step in using FastMCP, as the server manages the connection to the underlying model. It includes additional validation for the endpoint URL and the optional –Timeout parameter (in seconds) for API requests. The resulting server object also offers a `TestConnection` method that can be used to verify connectivity.
 
 ### PARAMETERS
 
@@ -68,6 +68,16 @@ Position: 4
 Default value: @{}
 ```
 
+#### -Timeout
+An optional timeout (in seconds) for HTTP requests.
+
+```yaml
+Type: Int
+Required: False
+Position: 5
+Default value: 30
+```
+
 ### EXAMPLES
 
 #### Example 1: Create a basic server with OpenAI
@@ -85,6 +95,22 @@ $options = @{
 $server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-api-key" -Model "gpt-4" -Options $options
 ```
 
+#### Example 3: Create a basic server with OpenAI and test connection
+```powershell
+$server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-api-key"
+if ($server.TestConnection()) {
+    Write-Output "Connection successful."
+} else {
+    Write-Output "Connection failed."
+}
+```
+
+#### Example 4: Create a server with a custom model, options, and extended timeout
+```powershell
+$options = @{ Name = "CustomOpenAIServer" }
+$server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey "your-api-key" -Model "gpt-4" -Options $options -Timeout 60
+```
+
 ## New-Image
 
 ### SYNOPSIS
@@ -93,7 +119,7 @@ Creates an image resource for use with AI models.
 ### SYNTAX
 
 ```
-New-Image [-Path] <string> [[-Description] <string>] [[-Tags] <string[]>]
+New-Image [-Path] <string> [[-Name] <string>] [[-Description] <string>] [[-Tags] <string[]>] [-CreateIfNotExists]
 ```
 
 or
@@ -118,11 +144,12 @@ Default value: None
 ```
 
 #### -Name
-A unique name for the image resource (used in the NamedImage parameter set).
+A unique name for the image resource (used in the NamedImage parameter set, optional in Path set).
 
 ```yaml
 Type: String
 Required: True (in NamedImage parameter set)
+Required: False (in Path parameter set)
 Position: 0
 Default value: None
 ```
@@ -147,6 +174,16 @@ Position: 2
 Default value: @()
 ```
 
+#### -CreateIfNotExists
+Create a placeholder image object even if the file doesn't exist at the specified path.
+
+```yaml
+Type: Switch
+Required: False
+Position: Named
+Default value: False
+```
+
 ### EXAMPLES
 
 #### Example 1: Create an image resource from a file
@@ -162,6 +199,11 @@ $image = New-Image -Path "./images/team.jpg" -Description "Company team photo fr
 #### Example 3: Create a named image (for testing)
 ```powershell
 $image = New-Image -Name "TestImage" -Description "A test image resource"
+```
+
+#### Example 4: Create a named image with a path that may not exist yet
+```powershell
+$image = New-Image -Name "TestImage" -Path "C:\Temp\TestImage.jpg" -Description "A test image" -CreateIfNotExists
 ```
 
 ## New-Tool

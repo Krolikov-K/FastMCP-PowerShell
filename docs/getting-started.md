@@ -48,6 +48,18 @@ First, create a connection to an AI model provider:
 $server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey $env:OPENAI_API_KEY
 ```
 
+### Creating a Server Connection with Connection Test
+
+First, create a connection to an AI model provider and test the connection:
+```powershell
+$server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey $env:OPENAI_API_KEY
+if ($server.TestConnection()) {
+    Write-Output "Connected to AI model provider successfully."
+} else {
+    Write-Output "Connection test failed. Check your Endpoint and ApiKey."
+}
+```
+
 ### Getting a Context
 
 Next, get a context object that will manage your interaction with the model:

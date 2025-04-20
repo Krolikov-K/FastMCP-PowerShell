@@ -146,14 +146,16 @@ function New-Prompt
         
         try
         {
-            return & $this.RenderScript @arguments
+            $result = & $this.RenderScript @arguments
+            if (-not $result) { throw "RenderScript returned no output." }
+            return $result
         }
         catch
         {
             $logger.Error("Error rendering prompt: $_")
             throw [System.Exception]::new("Error rendering prompt $($this.Name): $_")
         }
-    }
+    } -Force
     
     return $prompt
 }

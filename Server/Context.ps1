@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Context functionality for FastMCP
+Context functionality for FastMCP with added progress reporting.
 #>
 
 function Get-FastMCPContext
@@ -34,30 +34,29 @@ function Get-FastMCPContext
     }
     
     $context | Add-Member -MemberType ScriptMethod -Name 'AddResource' -Value {
-        param(
-            [string]$Name,
-            [string]$Description = '',
-            [object]$ContentProvider = ''
-        )
-        
-        # If ContentProvider is a string, convert it to a scriptblock
-        if ($ContentProvider -is [string])
+        param($resourceOrName, $Description = '', $ContentProvider = '')
+        if ($resourceOrName -is [PSCustomObject] -and $resourceOrName.PSTypeName -eq 'FastMCPResource')
         {
-            $scriptContent = $ContentProvider
-            $ContentProvider = [scriptblock]::Create("return @'`n$scriptContent`n'@")
+             $this.Resources[$resourceOrName.Name] = $resourceOrName
+             return $resourceOrName
         }
-        elseif ($ContentProvider -is [PSCustomObject] -and $ContentProvider.PSTypeName -eq 'FastMCPResource')
-        {
-            # If it's already a resource object, just store it
-            $this.Resources[$Name] = $ContentProvider
-            return $ContentProvider
+        else {
+            $name = $resourceOrName
+            if ($ContentProvider -is [string])
+            {
+                $scriptContent = $ContentProvider
+                $ContentProvider = [scriptblock]::Create("return @'`n$scriptContent`n'@")
+            }
+            elseif ($ContentProvider -is [PSCustomObject] -and $ContentProvider.PSTypeName -eq 'FastMCPResource')
+            {
+                $this.Resources[$name] = $ContentProvider
+                return $ContentProvider
+            }
+            $resource = New-Resource -Name $name -Description $Description -Content $ContentProvider
+            $this.Resources[$name] = $resource
+            return $resource
         }
-        
-        # Create and store the resource
-        $resource = New-Resource -Name $Name -Description $Description -Content $ContentProvider
-        $this.Resources[$Name] = $resource
-        return $resource
-    }
+    } -Force
     
     $context | Add-Member -MemberType ScriptMethod -Name 'AddPrompt' -Value {
         param($prompt)
@@ -91,6 +90,15 @@ function Get-FastMCPContext
             Content   = 'This is a mock response. In a real implementation, this would be the response from the AI model.'
             Timestamp = Get-Date
         }
+    }
+    
+    # New method: ReportProgress for long-running tasks
+    $context | Add-Member -MemberType ScriptMethod -Name 'ReportProgress' -Value {
+        param([hashtable]$progressInfo)
+        $logger = Get-Logger -Name 'FastMCPContext'
+        $jsonProgress = $progressInfo | ConvertTo-Json -Compress
+        $logger.Info("Progress update: $jsonProgress")
+        Write-Verbose "Progress: $jsonProgress"
     }
     
     return $context

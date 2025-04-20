@@ -19,15 +19,13 @@ class ToolManager
         }
         catch
         {
-            # Fallback if logger is not available
-            $this.Logger = [PSCustomObject]@{
-                Name     = 'ToolManager'
-                Debug    = { param($msg) Write-Debug "[$($this.Name)] $msg" }.GetNewClosure()
-                Info     = { param($msg) Write-Information "[$($this.Name)] $msg" }.GetNewClosure()
-                Warning  = { param($msg) Write-Warning "[$($this.Name)] $msg" }.GetNewClosure()
-                Error    = { param($msg) Write-Error "[$($this.Name)] $msg" }.GetNewClosure()
-                Critical = { param($msg) Write-Error "[$($this.Name)] $msg" }.GetNewClosure()
-            }
+            # Fallback if logger is not available: create logger via New-Object
+            $this.Logger = New-Object PSObject
+            Add-Member -InputObject $this.Logger -MemberType ScriptMethod -Name 'Debug' -Value { param($msg) Write-Debug "[$($this.Name)] $msg" } -Force
+            Add-Member -InputObject $this.Logger -MemberType ScriptMethod -Name 'Info' -Value { param($msg) Write-Information "[$($this.Name)] $msg" } -Force
+            Add-Member -InputObject $this.Logger -MemberType ScriptMethod -Name 'Warning' -Value { param($msg) Write-Warning "[$($this.Name)] $msg" } -Force
+            Add-Member -InputObject $this.Logger -MemberType ScriptMethod -Name 'Error' -Value { param($msg) Write-Error "[$($this.Name)] $msg" } -Force
+            Add-Member -InputObject $this.Logger -MemberType ScriptMethod -Name 'Critical' -Value { param($msg) Write-Error "[$($this.Name)] $msg" } -Force
         }
     }
 

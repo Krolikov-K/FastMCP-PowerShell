@@ -35,11 +35,7 @@ Describe 'New-Image' {
     }
     
     It 'Should throw an error when the image file does not exist' {
-        $scriptBlock = {
-            New-Image -Path 'C:\path\to\nonexistent\image.png' -Description 'Missing image' -Name 'MissingImage'
-        }
-        
-        $scriptBlock | Should -Throw -ExpectedMessage 'Image file not found*'
+        { New-Image -Path 'C:\path\to\nonexistent\image.png' -Description 'Missing image' -Name 'MissingImage' } | Should -Throw -ExpectedMessage 'Image file not found*'
     }
     
     It 'Should support tags' {

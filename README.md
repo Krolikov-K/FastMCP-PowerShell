@@ -29,45 +29,27 @@ Import-Module "d:\path\to\FastMCP-PowerShell\FastMCP.psd1"
 # Import the module
 Import-Module FastMCP
 
-# Create a new server instance
+# Create a new server instance and test connectivity
 $server = New-FastMCPServer -Endpoint "https://api.example.com/v1" -ApiKey "your-api-key"
-
-# Create an image
-$image = New-Image -Name "My Image" -Description "A test image" -Path "C:\path\to\image.jpg"
-
-# Create a tool
-$tool = New-Tool -Name "Calculator" -Description "Performs calculations" -Function {
-    param($operation, $a, $b)
-    
-    switch ($operation) {
-        "add" { return $a + $b }
-        "subtract" { return $a - $b }
-        "multiply" { return $a * $b }
-        "divide" { return $a / $b }
-        default { throw "Unknown operation: $operation" }
-    }
+if ($server.TestConnection()) {
+    Write-Output "Server is reachable!"
+} else {
+    Write-Output "Server connection failed."
 }
 
-# Create a prompt
-$prompt = New-Prompt -Name "Standard Query" -Description "A standard query format" -RenderScript {
-    param($query, $context)
-    
-    return @"
-Given the following context:
-$context
-
-Please respond to this query:
-$query
-"@
-}
-
-# Use the context
+# Get a context and add tools, resources, and prompts as needed
 $context = Get-FastMCPContext -Server $server
-$context.AddTool($tool)
-$context.AddPrompt($prompt)
 
-# Send a request
-$response = $context.SendRequest("What is 2 + 2?")
+# Simulate sending a request
+$response = $context.SendRequest("What is the current weather?")
+Write-Output $response.Content
+
+# (Optional) Simulate reporting progress during a long task
+for ($i = 10; $i -le 100; $i += 30) {
+    $progress = @{ Operation = "Example Task"; PercentComplete = $i; Timestamp = (Get-Date) }
+    $context.ReportProgress($progress)
+    Start-Sleep -Seconds 1
+}
 ```
 
 ## Core Concepts
@@ -101,15 +83,27 @@ Parameters:
 
 Creates an image resource for use with the model.
 
+#### Example 1: Create an image from a file path
 ```powershell
-New-Image -Name "Diagram" -Description "System architecture diagram" -Path "./diagram.png" -Tags "architecture", "documentation"
+New-Image -Path "./diagram.png" -Description "System architecture diagram"
+```
+
+#### Example 2: Create a named image (for testing purposes)
+```powershell
+New-Image -Name "Diagram" -Description "System architecture diagram"
+```
+
+#### Example 3: Create an image with both name and path (even if the file doesn't exist)
+```powershell
+New-Image -Name "TestImage" -Path "C:\path\to\image.jpg" -Description "Test image" -CreateIfNotExists
 ```
 
 Parameters:
-- `Name`: A unique name for the image
+- `Name`: A unique name for the image (used in testing or placeholder scenarios)
 - `Description`: A description of the image content
-- `Path`: File path to the image
+- `Path`: File path to the image (used for actual image resources)
 - `Tags`: Optional array of tags for categorization
+- `CreateIfNotExists`: Create an image object even if the file doesn't exist at the specified path
 
 ### `New-Tool`
 

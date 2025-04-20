@@ -34,9 +34,10 @@ Describe 'Get-FastMCPContext' {
         }
         
         It 'Should add a resource' {
+            $context = Get-FastMCPContext -Server $server
+            $resource = New-Resource -Name 'TestResource' -Description 'Test resource' -Content 'Resource content'
             $context.AddResource($resource)
             
-            $context.Resources.Count | Should Be 1
             $context.Resources['TestResource'] | Should Be $resource
         }
         

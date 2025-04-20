@@ -125,8 +125,22 @@ function New-Prompt
         [string[]]$Tags = @()
     )
     
-    $logger = Get-Logger -Name 'Prompt'
-    $logger.Debug("Creating new prompt: $Name")
+    $logger = $null
+    try {
+        $logger = Get-Logger -Name 'Prompt'
+    } catch {
+        # Fallback logger with Script properties instead of ScriptMethod
+        $logger = [PSCustomObject]@{
+            Debug    = {param($msg) Write-Debug "[Prompt] $msg"}
+            Info     = {param($msg) Write-Information "[Prompt] $msg"}
+            Warning  = {param($msg) Write-Warning "[Prompt] $msg"}
+            Error    = {param($msg) Write-Error "[Prompt] $msg"}
+            Critical = {param($msg) Write-Error "[Prompt] $msg"}
+        }
+    }
+    
+    # Use a simple Write-Verbose instead of logger to avoid errors
+    Write-Verbose "Creating new prompt: $Name"
     
     $prompt = [PSCustomObject]@{
         Name         = $Name
@@ -141,8 +155,13 @@ function New-Prompt
     $prompt | Add-Member -MemberType ScriptMethod -Name 'Render' -Value {
         param([hashtable]$arguments)
         
-        $logger = Get-Logger -Name "Prompt:$($this.Name)"
-        $logger.Debug("Rendering prompt with arguments: $($arguments | ConvertTo-Json -Compress)")
+        # Use try/catch with Write-Verbose instead of logger to avoid errors
+        try {
+            $logger = Get-Logger -Name "Prompt:$($this.Name)"
+            $logger.Debug("Rendering prompt with arguments: $($arguments | ConvertTo-Json -Compress)")
+        } catch {
+            Write-Verbose "Rendering prompt $($this.Name) with arguments: $arguments"
+        }
         
         try
         {
@@ -152,7 +171,7 @@ function New-Prompt
         }
         catch
         {
-            $logger.Error("Error rendering prompt: $_")
+            Write-Error "Error rendering prompt $($this.Name): $_"
             throw [System.Exception]::new("Error rendering prompt $($this.Name): $_")
         }
     } -Force

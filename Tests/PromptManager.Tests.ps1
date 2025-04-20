@@ -69,19 +69,13 @@ Describe 'PromptManager' {
         }
         
         It 'Should throw an error when rendering fails' {
-            $prompt = [Prompt]::new('TestPrompt', 'Test Description', { 
-                param($requiredParam)
-                return "Value: $requiredParam" 
-            }, @('test'))
-            
-            # Test throwing error in Pester 3.4.0 compatible way
+            $prompt = New-Prompt -Name 'FailPrompt' -Description 'Fails' -RenderScript { throw "fail" }
             $threw = $false
             try {
                 $prompt.Render(@{})
             } catch {
                 $threw = $true
             }
-            
             $threw | Should Be $true
         }
     }

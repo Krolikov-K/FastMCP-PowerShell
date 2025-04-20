@@ -261,6 +261,10 @@ class Image
                     # Last resort if even the error handling fails
                     Write-Warning "Error handling failed: $_"
                 }
+                # Set default fallback values to avoid null format/size issues
+                $this.Format = $this.Format -or 'Unknown'
+                $this.Width  = $this.Width -or 0
+                $this.Height = $this.Height -or 0
             }
         }
     }
@@ -354,7 +358,6 @@ function New-Image
         # Handle file not existing
         if (-not $fileExists)
         {
-            # Important: Check if CreateIfNotExists switch is present
             if ($CreateIfNotExists.IsPresent)
             {
                 Write-Verbose "Creating placeholder image for non-existent file: $Path"
@@ -438,16 +441,7 @@ function New-Image
                 Write-Verbose 'Successfully created placeholder image object'
                 return $image
             }
-            else
-            {
-                # Check if directory exists 
-                $directory = Split-Path -Path $Path -Parent
-                if (-not [string]::IsNullOrEmpty($directory) -and -not (Test-Path -Path $directory))
-                {
-                    throw "Directory does not exist: $directory"
-                }
-                throw "Image file not found: $Path"
-            }
+            throw "Image file not found: $Path"
         }
         
         try
@@ -509,7 +503,7 @@ function New-Image
             Data           = $null
             Format         = $null
             Width          = 0
-            Height         = 0
+            Height          = 0
             Tags           = $Tags
             Name           = $Name
             Description    = $Description

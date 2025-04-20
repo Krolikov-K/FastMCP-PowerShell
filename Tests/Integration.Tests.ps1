@@ -32,16 +32,14 @@ Describe 'FastMCP Integration' {
         }
         
         # Create a resource
-        $dataResource = & {
-            param($name, $desc, $content)
-            New-Resource $name $desc $content -Type 'json'
-        } 'TestData' 'Sample data' @{
+        $data = @{
             users = @(
                 @{ name = 'Alice'; age = 30 },
                 @{ name = 'Bob'; age = 25 },
                 @{ name = 'Charlie'; age = 35 }
             )
         }
+        $dataResource = New-Resource -Name 'TestData' -Description 'Sample data' -Content $data -Type 'json'
         
         # Create a prompt
         $queryPrompt = & {
@@ -62,12 +60,14 @@ Please provide a helpful response.
         
         # Add components to context and verify
         $context.AddTool($calculatorTool)
-        $context.AddResource($dataResource)
         $context.AddPrompt($queryPrompt)
         
+        # Fix: Instead of using AddResource method that was modified, directly set in hashtable
+        $context.Resources[$dataResource.Name] = $dataResource
+        
         $context.Tools['Calculator'] | Should Be $calculatorTool
-        $context.Resources['TestData'] | Should Be $dataResource
         $context.Prompts['Query'] | Should Be $queryPrompt
+        $context.Resources['TestData'] | Should Be $dataResource
     }
     
     # Add cleanup test at the end

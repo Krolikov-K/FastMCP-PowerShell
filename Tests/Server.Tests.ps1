@@ -42,7 +42,7 @@ Describe 'New-FastMCPServer' {
         $server = New-FastMCPServer -Endpoint 'https://api.example.com' -ApiKey 'test-api-key'
         
         # Check if method exists in a way compatible with Pester 3.4.0
-        $hasMethod = $server | Get-Member -Name 'GetContext' -MemberType Method
+        $hasMethod = $server | Get-Member -Name 'GetContext' -MemberType ScriptMethod
         $hasMethod | Should Not BeNullOrEmpty
         
         # Test method works

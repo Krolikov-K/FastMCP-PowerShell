@@ -27,23 +27,30 @@ Describe 'New-Image' {
     It 'Should create an image object from a file path' {
         $image = New-Image -Path $testImagePath -Description 'A test image' -Name 'TestImage'
         
-        $image | Should -Not -BeNullOrEmpty
-        $image.Name | Should -Be 'TestImage'
-        $image.Description | Should -Be 'A test image'
-        $image.Path | Should -Be $testImagePath
-        $image.Type | Should -Be 'Image'
+        $image | Should Not BeNullOrEmpty
+        $image.Name | Should Be 'TestImage'
+        $image.Description | Should Be 'A test image'
+        $image.Path | Should Be $testImagePath
+        $image.Type | Should Be 'Image'
     }
     
     It 'Should throw an error when the image file does not exist' {
-        { New-Image -Path 'C:\path\to\nonexistent\image.png' -Description 'Missing image' -Name 'MissingImage' } | Should -Throw -ExpectedMessage 'Image file not found*'
+        $nonExistentPath = Join-Path $env:TEMP 'nonexistent_image.png'
+        # Ensure file doesn't exist
+        if (Test-Path $nonExistentPath) {
+            Remove-Item $nonExistentPath -Force
+        }
+        
+        { New-Image -Path $nonExistentPath -Description 'Missing image' -Name 'MissingImage' } | 
+            Should Throw "Image file not found: $nonExistentPath"
     }
     
     It 'Should support tags' {
         $image = New-Image -Path $testImagePath -Description 'Image with tags' -Name 'TaggedImage' -Tags @('test', 'image')
         
-        $image | Should -Not -BeNullOrEmpty
-        $image.Tags | Should -Not -BeNullOrEmpty
-        $image.Tags.Count | Should -Be 2
+        $image | Should Not BeNullOrEmpty
+        $image.Tags | Should Not BeNullOrEmpty
+        $image.Tags.Count | Should Be 2
     }
     
     # Test metadata loading only when System.Drawing is available
@@ -51,8 +58,8 @@ Describe 'New-Image' {
         $image = New-Image -Path $testImagePath -Description 'Test Image' -Name 'MetadataTest'
         
         # These properties get populated when System.Drawing is loaded
-        $image.Format | Should -Not -BeNullOrEmpty
-        $image.MimeType | Should -Not -BeNullOrEmpty
+        $image.Format | Should Not BeNullOrEmpty
+        $image.MimeType | Should Not BeNullOrEmpty
     }
     
     # Add cleanup test at the end
@@ -60,6 +67,6 @@ Describe 'New-Image' {
         if (Test-Path $testImagePath) {
             Remove-Item $testImagePath -Force
         }
-        (Test-Path $testImagePath) | Should -Be $false
+        (Test-Path $testImagePath) | Should Be $false
     }
 }

@@ -36,21 +36,31 @@ class ResourceManager
 
     [object] AddResource([object]$resource, [string]$name)
     {
-        $resourceName = $name -or $resource.Name
+        $resourceName = $name
+        if ([string]::IsNullOrEmpty($resourceName) -and $resource.PSObject.Properties['Name']) {
+            $resourceName = $resource.Name
+        }
         
-        if (-not $resourceName)
+        if ([string]::IsNullOrEmpty($resourceName))
         {
             $this.Logger.Error('Resource name is required')
             throw [System.Exception]::new('Resource name is required')
         }
-        
+
+        # Ensure the resource object has the correct Name property
+        if ($resource.PSObject.Properties['Name']) {
+            $resource.Name = $resourceName
+        } else {
+            Add-Member -InputObject $resource -MemberType NoteProperty -Name 'Name' -Value $resourceName -Force
+        }
+
         if ($this.HasResource($resourceName))
         {
             switch ($this.DuplicateBehavior)
             {
                 'warn'
                 {
-                    $this.Logger.Warning("Resource already exists: $resourceName - replacing")
+                    $this.Logger.Warning("Resource already exists: $resourceName")
                 }
                 'error'
                 {
@@ -68,10 +78,10 @@ class ResourceManager
                 }
             }
         }
-        
+
         $this.Logger.Debug("Adding/updating resource: $resourceName")
         $this.Resources[$resourceName] = $resource
-        
+
         return $resource
     }
 

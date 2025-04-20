@@ -6,7 +6,7 @@ Tool manager functionality
 # ToolManager class
 class ToolManager
 {
-    [hashtable]$Tools = @{}
+    [hashtable]$Tools = @{ }
     [string]$DuplicateBehavior = 'warn'
     hidden [object]$Logger
 
@@ -36,21 +36,31 @@ class ToolManager
 
     [object] AddTool([object]$tool, [string]$name)
     {
-        $toolName = $name -or $tool.Name
+        $toolName = $name
+        if ([string]::IsNullOrEmpty($toolName) -and $tool.PSObject.Properties['Name']) {
+            $toolName = $tool.Name
+        }
         
-        if (-not $toolName)
+        if ([string]::IsNullOrEmpty($toolName))
         {
             $this.Logger.Error('Tool name is required')
             throw [FastMCPException]::new('Tool name is required')
         }
-        
+
+        # Ensure the tool object has the correct Name property
+        if ($tool.PSObject.Properties['Name']) {
+            $tool.Name = $toolName
+        } else {
+            Add-Member -InputObject $tool -MemberType NoteProperty -Name 'Name' -Value $toolName -Force
+        }
+
         if ($this.HasTool($toolName))
         {
             switch ($this.DuplicateBehavior)
             {
                 'warn'
                 {
-                    $this.Logger.Warning("Tool already exists: $toolName - replacing")
+                    $this.Logger.Warning("Tool already exists: $toolName")
                     $this.Tools[$toolName] = $tool
                 }
                 'replace'

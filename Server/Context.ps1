@@ -35,24 +35,44 @@ function Get-FastMCPContext
     
     $context | Add-Member -MemberType ScriptMethod -Name 'AddResource' -Value {
         param($resourceOrName, $Description = '', $ContentProvider = '')
-        if ($resourceOrName -is [PSCustomObject] -and $resourceOrName.PSTypeName -eq 'FastMCPResource')
+        
+        # Case 1: Resource object passed directly
+        if ($resourceOrName -is [PSCustomObject] -and $resourceOrName.PSObject.Properties['Name']) 
         {
-             $this.Resources[$resourceOrName.Name] = $resourceOrName
-             return $resourceOrName
+            # This is the critical fix - use the Name property directly and store in Resources collection
+            $name = $resourceOrName.Name
+            $this.Resources[$name] = $resourceOrName
+            return $resourceOrName
         }
-        else {
+        # Case 2: String name passed, create new resource
+        elseif ($resourceOrName -is [string]) {
             $name = $resourceOrName
+            
+            # Handle different content provider types
             if ($ContentProvider -is [string])
             {
                 $scriptContent = $ContentProvider
                 $ContentProvider = [scriptblock]::Create("return @'`n$scriptContent`n'@")
             }
-            elseif ($ContentProvider -is [PSCustomObject] -and $ContentProvider.PSTypeName -eq 'FastMCPResource')
+            elseif ($ContentProvider -is [PSCustomObject] -and $ContentProvider.PSObject.Properties['Name']) 
             {
+                $ContentProvider.Name = $name
                 $this.Resources[$name] = $ContentProvider
                 return $ContentProvider
             }
+            
             $resource = New-Resource -Name $name -Description $Description -Content $ContentProvider
+            $this.Resources[$name] = $resource
+            return $resource
+        }
+        # Case 3: Resource-like object passed
+        else {
+            # Try to adapt the object to a resource
+            $name = $resourceOrName.Name -or "Resource_$(Get-Random)"
+            $desc = $Description -or $resourceOrName.Description -or ""
+            $content = $ContentProvider -or $resourceOrName.Content -or $resourceOrName
+            
+            $resource = New-Resource -Name $name -Description $desc -Content $content
             $this.Resources[$name] = $resource
             return $resource
         }

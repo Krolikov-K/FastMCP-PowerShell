@@ -35,22 +35,19 @@ function Get-FastMCPContext
     
     $context | Add-Member -MemberType ScriptMethod -Name 'AddResource' -Value {
         param(
-            [Parameter(Mandatory = $true)]
             [string]$Name,
-            
-            [Parameter()]
-            [string]$Description = "",
-            
-            [Parameter(Mandatory = $true)]
-            [object]$ContentProvider
+            [string]$Description = '',
+            [object]$ContentProvider = ''
         )
         
         # If ContentProvider is a string, convert it to a scriptblock
-        if ($ContentProvider -is [string]) {
+        if ($ContentProvider -is [string])
+        {
             $scriptContent = $ContentProvider
             $ContentProvider = [scriptblock]::Create("return @'`n$scriptContent`n'@")
         }
-        elseif ($ContentProvider -is [PSCustomObject] -and $ContentProvider.PSTypeName -eq 'FastMCPResource') {
+        elseif ($ContentProvider -is [PSCustomObject] -and $ContentProvider.PSTypeName -eq 'FastMCPResource')
+        {
             # If it's already a resource object, just store it
             $this.Resources[$Name] = $ContentProvider
             return $ContentProvider
@@ -65,6 +62,7 @@ function Get-FastMCPContext
     $context | Add-Member -MemberType ScriptMethod -Name 'AddPrompt' -Value {
         param($prompt)
         $this.Prompts[$prompt.Name] = $prompt
+        return $prompt
     }
     
     $context | Add-Member -MemberType ScriptMethod -Name 'SendRequest' -Value {
@@ -99,7 +97,7 @@ function Get-FastMCPContext
 }
 
 # Ensure Export-ModuleMember is only called when in a module
-if ($MyInvocation.MyCommand.ModuleName)
+if ($MyInvocation.MyCommand.ScriptName -and $MyInvocation.MyCommand.ModuleName)
 {
     Export-ModuleMember -Function 'Get-FastMCPContext'
 }

@@ -1,111 +1,56 @@
 <#
 .SYNOPSIS
-Resource implementation for FastMCP
+Resource functionality for FastMCP
 #>
 
-# Resource class
-class Resource
+function New-Resource
 {
-    [string]$URI
-    [string]$Name
-    [string]$Description
-    [string]$MimeType
-    [System.Collections.Generic.HashSet[string]]$Tags
-    [scriptblock]$ContentProvider
-    hidden [object]$Logger
-
-    # Constructor
-    Resource([hashtable]$params)
-    {
-        $this.URI = $params.URI
-        $this.Name = $params.Name -or [System.IO.Path]::GetFileName($this.URI)
-        $this.Description = $params.Description -or ''
-        $this.MimeType = $params.MimeType -or 'text/plain'
-        $this.Tags = $params.Tags | ConvertTo-Set
-        $this.ContentProvider = $params.ContentProvider
-        $this.Logger = Get-Logger 'Resource'
-    }
-
-    # Read the resource content
-    [object] Read()
-    {
-        try
-        {
-            if ($this.ContentProvider)
-            {
-                return & $this.ContentProvider
-            }
-            elseif ($this.URI -like 'file:*')
-            {
-                $path = $this.URI -replace '^file://', ''
-                
-                # Determine how to read the file based on MIME type
-                if ($this.MimeType -like 'text/*')
-                {
-                    return Get-Content -Path $path -Raw
-                }
-                else
-                {
-                    return [System.IO.File]::ReadAllBytes($path)
-                }
-            }
-            else
-            {
-                throw [FastMCPException]::new('No content provider available')
-            }
-        }
-        catch
-        {
-            throw [FastMCPException]::new("Error reading resource $($this.URI): $_")
-        }
-    }
-
-    # Convert to MCP resource format
-    [hashtable] ToMCPResource()
-    {
-        return @{
-            uri         = $this.URI
-            name        = $this.Name
-            description = $this.Description
-            mimeType    = $this.MimeType
-        }
-    }
-}
-
-# Function to create a new resource
-function New-Resource {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
         [string]$Name,
         
         [Parameter()]
-        [string]$Description = "",
+        [string]$Description = '',
+        
+        [Parameter(Mandatory = $true)]
+        [object]$Content,
         
         [Parameter()]
-        [string]$Type = "Generic",
-        
-        [Parameter()]
-        [object]$Content = $null,
+        [string]$Type = 'text',
         
         [Parameter()]
         [string[]]$Tags = @()
     )
     
+    $logger = Get-Logger -Name 'Resource'
+    $logger.Debug("Creating new resource: $Name")
+    
+    # Content can be a script block or direct value
+    $contentValue = if ($Content -is [scriptblock])
+    {
+        & $Content
+    }
+    else
+    {
+        $Content
+    }
+    
     $resource = [PSCustomObject]@{
-        Name = $Name
-        Description = $Description
-        Type = $Type
-        Content = $Content
-        Tags = $Tags
-        PSTypeName = 'FastMCPResource'
+        Name         = $Name
+        Description  = $Description
+        Content      = $contentValue
+        Type         = $Type.ToLower()
+        Tags         = $Tags
+        ResourceType = 'Resource'
+        PSTypeName   = 'FastMCPResource'
     }
     
     return $resource
 }
 
-# Ensure Export-ModuleMember is only called when in a module
-if ($MyInvocation.ScriptName -ne '')
+# Export functions only if running inside a module
+if ($MyInvocation.MyCommand.ScriptName -and $MyInvocation.MyCommand.ModuleName)
 {
     Export-ModuleMember -Function 'New-Resource'
 }

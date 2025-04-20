@@ -40,16 +40,24 @@ function New-FastMCPServer
     $server | Add-Member -MemberType ScriptMethod -Name 'GetContext' -Value {
         param($contextId = $null)
         
-        $logger = Get-Logger -Name "Server:$($this.Name)"
-        $logger.Debug("Creating context with ID: $contextId")
+        try
+        {
+            $logger = Get-Logger -Name "Server:$($this.Name)"
+            $logger.Debug("Creating context with ID: $contextId")
+        }
+        catch
+        {
+            # Silently continue if logger fails
+        }
         
+        # Return the context directly
         return Get-FastMCPContext -Server $this -ContextId $contextId
     }
     
     return $server
 }
 
-if ($MyInvocation.MyCommand.ModuleName)
+if ($MyInvocation.MyCommand.ScriptName -and $MyInvocation.MyCommand.ModuleName)
 {
     Export-ModuleMember -Function 'New-FastMCPServer'
 }

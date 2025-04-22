@@ -353,4 +353,198 @@ for ($i = 1; $i -le 100; $i += 20) {
 }
 ```
 
+## Filesystem Operations
+
+Create tools that allow the AI model to interact with the filesystem safely:
+
+```powershell
+# Create a server connection
+$server = New-FastMCPServer -Endpoint "https://api.openai.com/v1" -ApiKey $env:OPENAI_API_KEY -Model "gpt-4"
+
+# Get a context
+$context = Get-FastMCPContext -Server $server
+
+# Define a safe root directory for file operations
+$safeRootDir = "C:\AIWorkspace"
+if (-not (Test-Path $safeRootDir)) {
+    New-Item -Path $safeRootDir -ItemType Directory -Force | Out-Null
+}
+
+# Create tools for file operations
+$fileReadTool = New-Tool -Name "ReadFile" -Description "Reads content from a file in the safe workspace" -Function {
+    param($relativePath)
+    
+    # Validate and sanitize the path
+    $safePath = Join-Path -Path $safeRootDir -ChildPath $relativePath
+    if (-not (Test-Path $safePath -PathType Leaf)) {
+        return "Error: File does not exist: $relativePath"
+    }
+    
+    # Check if file is within the safe directory
+    $fullPath = Resolve-Path $safePath
+    if (-not $fullPath.Path.StartsWith($safeRootDir, [StringComparison]::OrdinalIgnoreCase)) {
+        return "Error: Access denied. Cannot read files outside the safe workspace."
+    }
+    
+    # Read the file content
+    try {
+        $content = Get-Content -Path $safePath -Raw
+        return $content
+    } catch {
+        return "Error reading file: $_"
+    }
+}
+
+$fileWriteTool = New-Tool -Name "WriteFile" -Description "Writes content to a file in the safe workspace" -Function {
+    param($relativePath, $content)
+    
+    # Validate and sanitize the path
+    $safePath = Join-Path -Path $safeRootDir -ChildPath $relativePath
+    $parentDir = Split-Path -Path $safePath -Parent
+    
+    # Check if parent directory exists and create if needed
+    if (-not (Test-Path $parentDir)) {
+        New-Item -Path $parentDir -ItemType Directory -Force | Out-Null
+    }
+    
+    # Check if path is within the safe directory
+    $fullParentPath = Resolve-Path $parentDir
+    if (-not $fullParentPath.Path.StartsWith($safeRootDir, [StringComparison]::OrdinalIgnoreCase)) {
+        return "Error: Access denied. Cannot write files outside the safe workspace."
+    }
+    
+    # Write the content
+    try {
+        Set-Content -Path $safePath -Value $content -Force
+        return "File written successfully: $relativePath"
+    } catch {
+        return "Error writing file: $_"
+    }
+}
+
+$fileDeleteTool = New-Tool -Name "DeleteFile" -Description "Deletes a file from the safe workspace" -Function {
+    param($relativePath)
+    
+    # Validate and sanitize the path
+    $safePath = Join-Path -Path $safeRootDir -ChildPath $relativePath
+    if (-not (Test-Path $safePath -PathType Leaf)) {
+        return "Error: File does not exist: $relativePath"
+    }
+    
+    # Check if file is within the safe directory
+    $fullPath = Resolve-Path $safePath
+    if (-not $fullPath.Path.StartsWith($safeRootDir, [StringComparison]::OrdinalIgnoreCase)) {
+        return "Error: Access denied. Cannot delete files outside the safe workspace."
+    }
+    
+    # Delete the file
+    try {
+        Remove-Item -Path $safePath -Force
+        return "File deleted successfully: $relativePath"
+    } catch {
+        return "Error deleting file: $_"
+    }
+}
+
+# Create tools for directory operations
+$listDirectoryTool = New-Tool -Name "ListDirectory" -Description "Lists files and directories in the safe workspace" -Function {
+    param($relativePath = "")
+    
+    # Validate and sanitize the path
+    $safePath = Join-Path -Path $safeRootDir -ChildPath $relativePath
+    if (-not (Test-Path $safePath -PathType Container)) {
+        return "Error: Directory does not exist: $relativePath"
+    }
+    
+    # Check if directory is within the safe directory
+    $fullPath = Resolve-Path $safePath
+    if (-not $fullPath.Path.StartsWith($safeRootDir, [StringComparison]::OrdinalIgnoreCase)) {
+        return "Error: Access denied. Cannot list directories outside the safe workspace."
+    }
+    
+    # List the directory contents
+    try {
+        $items = Get-ChildItem -Path $safePath | Select-Object Name, LastWriteTime, @{Name="Type";Expression={if($_.PSIsContainer){"Directory"}else{"File"}}}
+        return $items
+    } catch {
+        return "Error listing directory: $_"
+    }
+}
+
+$createDirectoryTool = New-Tool -Name "CreateDirectory" -Description "Creates a directory in the safe workspace" -Function {
+    param($relativePath)
+    
+    # Validate and sanitize the path
+    $safePath = Join-Path -Path $safeRootDir -ChildPath $relativePath
+    
+    # Check if path is within the safe directory
+    $parentDir = Split-Path -Path $safePath -Parent
+    if (-not (Test-Path $parentDir)) {
+        New-Item -Path $parentDir -ItemType Directory -Force | Out-Null
+    }
+    $fullParentPath = Resolve-Path $parentDir
+    if (-not $fullParentPath.Path.StartsWith($safeRootDir, [StringComparison]::OrdinalIgnoreCase)) {
+        return "Error: Access denied. Cannot create directories outside the safe workspace."
+    }
+    
+    # Create the directory
+    try {
+        New-Item -Path $safePath -ItemType Directory -Force | Out-Null
+        return "Directory created successfully: $relativePath"
+    } catch {
+        return "Error creating directory: $_"
+    }
+}
+
+$searchFilesTool = New-Tool -Name "SearchFiles" -Description "Searches for files matching a pattern in the safe workspace" -Function {
+    param($pattern, $relativePath = "")
+    
+    # Validate and sanitize the path
+    $safePath = Join-Path -Path $safeRootDir -ChildPath $relativePath
+    if (-not (Test-Path $safePath -PathType Container)) {
+        return "Error: Directory does not exist: $relativePath"
+    }
+    
+    # Check if directory is within the safe directory
+    $fullPath = Resolve-Path $safePath
+    if (-not $fullPath.Path.StartsWith($safeRootDir, [StringComparison]::OrdinalIgnoreCase)) {
+        return "Error: Access denied. Cannot search directories outside the safe workspace."
+    }
+    
+    # Search for files
+    try {
+        $items = Get-ChildItem -Path $safePath -Recurse -Filter $pattern | Select-Object FullName, LastWriteTime, Length
+        # Convert full paths to relative paths
+        $items | ForEach-Object {
+            $_.FullName = $_.FullName.Replace($safeRootDir, "").TrimStart('\')
+        }
+        return $items
+    } catch {
+        return "Error searching files: $_"
+    }
+}
+
+# Add all tools to the context
+$context.AddTool($fileReadTool)
+$context.AddTool($fileWriteTool)
+$context.AddTool($fileDeleteTool)
+$context.AddTool($listDirectoryTool)
+$context.AddTool($createDirectoryTool)
+$context.AddTool($searchFilesTool)
+
+# Send a request to use the filesystem tools
+$response = $context.SendRequest(@"
+I need your help to organize a project in the file system. Please follow these steps:
+
+1. Create a directory structure for a simple web project with folders for HTML, CSS, and JavaScript files
+2. Create an index.html file with a basic HTML5 template
+3. Create a styles.css file with some basic styling
+4. Create a script.js file with a simple "Hello, World!" alert
+5. List all the files you created
+"@)
+
+# Display the response
+Write-Output $response.Content
+```
+
 These advanced scenarios demonstrate the flexibility and power of FastMCP for building complex AI-powered workflows in PowerShell.
